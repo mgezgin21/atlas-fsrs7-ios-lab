@@ -26,6 +26,32 @@ jobs:
     steps:
       - name: Check out isolated FFI project
         uses: actions/checkout@v4
+      - name: Audit source hashes, lipo contracts, and script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('FILE_HASHES.json').read_text(encoding='utf-8'))
+          assert manifest['upstream_commit'] == '0a5737406a0c5c7a5259b144738cbe4a0b649d76'
+          for relative, expected in manifest['files'].items():
+              file = Path(relative)
+              assert file.is_file(), f'Missing source file: {relative}'
+              actual = hashlib.sha256(file.read_bytes()).hexdigest()
+              assert actual == expected, f'SHA256 mismatch: {relative}'
+          workflow = Path('.github/workflows/atlas-fsrs7-ios-verification.yml').read_text()
+          assert 'xcrun lipo -verify_arch' not in workflow, 'Invalid Apple lipo argument ordering'
+          assert 'xcrun lipo "$SIM_FAT" -verify_arch arm64 x86_64' in workflow
+          assert 'xcrun lipo ios/NativeRust/simulator/libatlas_fsrs7_probe.a -verify_arch arm64 x86_64' in workflow
+          preflight = Path('scripts/ios/verify_xcode_link.py').read_text()
+          assert 'run("xcrun", "lipo", str(archive), "-archs")' in preflight
+          assert len(manifest['files']) == 8, 'Unexpected source manifest scope'
+          print('IOS_PINNED_SOURCE_AND_LIPO_CLI_PREFLIGHT=PASS;FILES=8')
+          PY
+          python3 -m py_compile scripts/ios/verify_xcode_link.py
+          ruby -c scripts/ios/patch_runner_link.rb
       - name: Toolchain / Apple Silicon / Xcode details
         shell: bash
         run: |
