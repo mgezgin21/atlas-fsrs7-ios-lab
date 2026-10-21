@@ -78,7 +78,7 @@ jobs:
             target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a \
             target/x86_64-apple-ios/release/libatlas_fsrs7_probe.a \
             -output "$SIM_FAT"
-          xcrun lipo -verify_arch arm64 x86_64 "$SIM_FAT"
+          xcrun lipo "$SIM_FAT" -verify_arch arm64 x86_64
           file "$SIM_FAT"
           xcrun lipo -info "$SIM_FAT"
           for archive in target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a target/x86_64-apple-ios/release/libatlas_fsrs7_probe.a; do
@@ -123,7 +123,7 @@ jobs:
           mkdir -p ios/NativeRust/device ios/NativeRust/simulator
           cp ../../target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a ios/NativeRust/device/
           cp ../../target/atlas_fsrs7_simulator_universal.a ios/NativeRust/simulator/libatlas_fsrs7_probe.a
-          xcrun lipo -verify_arch arm64 x86_64 ios/NativeRust/simulator/libatlas_fsrs7_probe.a
+          xcrun lipo ios/NativeRust/simulator/libatlas_fsrs7_probe.a -verify_arch arm64 x86_64
           ruby ../../scripts/ios/patch_runner_link.rb ios/Runner.xcodeproj simulator
           python3 ../../scripts/ios/verify_xcode_link.py ios/Runner.xcodeproj simulator Debug
           # Flutter's generated widget_test.dart expects the deleted template
