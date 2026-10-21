@@ -43,7 +43,7 @@ def main():
 
     # Xcode's simulator Debug defaults may link both host x86_64 and arm64.
     # Verify the archive contains BOTH, rather than waiting for a late ld error.
-    archs = set(run("xcrun", "lipo", "-archs", str(archive)).split())
+    archs = set(run("xcrun", "lipo", str(archive), "-archs").split())
     required = {"arm64", "x86_64"} if variant == "simulator" else {"arm64"}
     if not required.issubset(archs):
         raise SystemExit(
