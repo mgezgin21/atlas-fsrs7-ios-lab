@@ -117,7 +117,8 @@ jobs:
           mkdir -p ios/NativeRust/device ios/NativeRust/simulator
           cp ../../target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a ios/NativeRust/device/
           cp ../../target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a ios/NativeRust/simulator/
-          ruby ../../scripts/ios/patch_runner_link.rb ios/Runner.xcodeproj
+          ruby ../../scripts/ios/patch_runner_link.rb ios/Runner.xcodeproj simulator
+          python3 ../../scripts/ios/verify_xcode_link.py ios/Runner.xcodeproj simulator Debug
           # Flutter's generated widget_test.dart expects the deleted template
           # MyApp class. Replace it with an ABI contract test for THIS probe.
           # The host test validates Dart layouts, not iOS native execution;
@@ -145,6 +146,11 @@ jobs:
           cd ios_build/atlas_fsrs7_ios_probe
           flutter build ios --simulator --debug --no-codesign --dart-define=ATLAS_FSRS7_IOS_NONCE="$NONCE"
           test -d build/ios/iphonesimulator/Runner.app
+          xcrun nm -gj build/ios/iphonesimulator/Runner.app/Runner > "$RUNNER_TEMP/fsrs7-simulator-exports.txt"
+          for symbol in atlas_fsrs7_engine_version atlas_fsrs7_abi_version atlas_fsrs7_parameter_count atlas_fsrs7_state_size atlas_fsrs7_output_size atlas_fsrs7_next; do
+            grep -Fxq "_${symbol}" "$RUNNER_TEMP/fsrs7-simulator-exports.txt" || { echo "Missing exported Runner symbol: $symbol"; exit 1; }
+          done
+          echo "IOS_SIMULATOR_EXPORTED_RUST_SYMBOLS=PASS"
           echo 'IOS_SIMULATOR_FLUTTER_DEBUG_LINK=PASS'
       - name: Boot simulator and execute REAL Dart -> static Rust FFI
         shell: bash
@@ -186,8 +192,15 @@ jobs:
         run: |
           set -euo pipefail
           cd ios_build/atlas_fsrs7_ios_probe
+          ruby ../../scripts/ios/patch_runner_link.rb ios/Runner.xcodeproj device
+          python3 ../../scripts/ios/verify_xcode_link.py ios/Runner.xcodeproj device Release
           flutter build ios --release --no-codesign --dart-define=ATLAS_FSRS7_IOS_NONCE="$NONCE"
           test -d build/ios/iphoneos/Runner.app
+          xcrun nm -gj build/ios/iphoneos/Runner.app/Runner > "$RUNNER_TEMP/fsrs7-device-exports.txt"
+          for symbol in atlas_fsrs7_engine_version atlas_fsrs7_abi_version atlas_fsrs7_parameter_count atlas_fsrs7_state_size atlas_fsrs7_output_size atlas_fsrs7_next; do
+            grep -Fxq "_${symbol}" "$RUNNER_TEMP/fsrs7-device-exports.txt" || { echo "Missing exported iPhone symbol: $symbol"; exit 1; }
+          done
+          echo "IOS_IPHONE_EXPORTED_RUST_SYMBOLS=PASS"
           file build/ios/iphoneos/Runner.app/Runner
           echo 'IOS_IPHONE_ARM64_FLUTTER_RELEASE_LINK=PASS'
       - name: Upload evidence, libraries, and generated lockfile
