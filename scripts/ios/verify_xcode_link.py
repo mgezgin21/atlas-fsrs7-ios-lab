@@ -71,7 +71,7 @@ def main():
     if not settings.get("OTHER_LDFLAGS") or not settings.get("LIBRARY_SEARCH_PATHS"):
         plain = run(*args)
         for key in ("OTHER_LDFLAGS", "LIBRARY_SEARCH_PATHS"):
-            match = re.findall(rf"(?m)^\\s*{key}\\s*=\\s*(.*)$", plain)
+            match = re.findall(rf"(?m)^\s*{key}\s*=\s*(.*)$", plain)
             if match:
                 settings[key] = match[-1]
 
