@@ -23,19 +23,19 @@ def main():
     base = ["xcodebuild", "-project", project, "-target", "Runner", "-configuration", configuration,
             "-sdk", sdk, "-showBuildSettings"]
     result = subprocess.run(base + ["-json"], text=True, capture_output=True)
+    flags = ""
     if result.returncode == 0:
         try:
             blocks = json.loads(result.stdout)
-            match = [b for b in blocks if b.get("target") == "Runner"]
-            if len(match) != 1:
-                raise ValueError("Expected exactly one Runner target")
-            settings = match[0].get("buildSettings", {})
-            flags = settings.get("OTHER_LDFLAGS", "")
-            if isinstance(flags, list):
-                flags = " ".join(map(str, flags))
-        except (ValueError, KeyError, TypeError) as exc:
-            raise SystemExit(f"Invalid Runner Xcode JSON settings: {exc}")
-    else:
+            matches = [b for b in blocks if b.get("target") == "Runner"]
+            if len(matches) == 1:
+                flags = matches[0].get("buildSettings", {}).get("OTHER_LDFLAGS", "")
+                if isinstance(flags, list):
+                    flags = " ".join(map(str, flags))
+        except (ValueError, KeyError, TypeError):
+            # Some Xcode versions mix diagnostics with JSON: use plain output.
+            pass
+    if not flags:
         result = subprocess.run(base, text=True, capture_output=True)
         if result.returncode:
             raise SystemExit("Xcode failed to show resolved build settings:\n" + result.stderr[-4000:])
