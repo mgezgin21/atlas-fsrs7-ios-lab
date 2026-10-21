@@ -50,6 +50,13 @@ runner.build_configurations.each do |config|
   config.build_settings.delete('OTHER_LDFLAGS[sdk=iphoneos*]')
   config.build_settings.delete('OTHER_LDFLAGS[sdk=iphonesimulator*]')
   config.build_settings['OTHER_LDFLAGS'] = flags.dup
+  # PBXFrameworksBuildPhase emits -latlas_fsrs7_probe (not a full path).
+  # Its matching -L search directory MUST be present in the actual Runner link.
+  # This was missing in CI run #6 despite the archive itself compiling.
+  config.build_settings['LIBRARY_SEARCH_PATHS'] = [
+    '$(inherited)',
+    "$(PROJECT_DIR)/NativeRust/#{variant}"
+  ]
 end
 project.save
 
@@ -64,5 +71,8 @@ reloaded_runner.build_configurations.each do |config|
   effective = Array(config.build_settings.fetch('OTHER_LDFLAGS')).join(' ')
   abort "Runner export retention flags missing for #{config.name}" unless
     required_exports.all? { |symbol| effective.include?("_#{symbol}") }
+  search_paths = Array(config.build_settings.fetch('LIBRARY_SEARCH_PATHS')).join(' ')
+  abort "Runner library lookup directory missing for #{config.name}: #{search_paths}" unless
+    search_paths.include?("NativeRust/#{variant}")
 end
-puts "IOS_RUNNER_NATIVE_ARCHIVE_LINK=PASS;VARIANT=#{variant};CONFIGURATIONS=#{reloaded_runner.build_configurations.length};LINKED_ARCHIVE=#{rust_relative_path}"
+puts "IOS_RUNNER_NATIVE_ARCHIVE_LINK=PASS;VARIANT=#{variant};CONFIGURATIONS=#{reloaded_runner.build_configurations.length};LINKED_ARCHIVE=#{rust_relative_path};LIBRARY_SEARCH_PATHS=PASS"
