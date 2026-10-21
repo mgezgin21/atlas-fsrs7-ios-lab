@@ -42,9 +42,18 @@ jobs:
               actual = hashlib.sha256(file.read_bytes()).hexdigest()
               assert actual == expected, f'SHA256 mismatch: {relative}'
           workflow = Path('.github/workflows/atlas-fsrs7-ios-verification.yml').read_text()
-          assert 'xcrun lipo -verify_arch' not in workflow, 'Invalid Apple lipo argument ordering'
-          assert 'xcrun lipo "$SIM_FAT" -verify_arch arm64 x86_64' in workflow
-          assert 'xcrun lipo ios/NativeRust/simulator/libatlas_fsrs7_probe.a -verify_arch arm64 x86_64' in workflow
+          # Inspect executable YAML shell lines only, not assertions below:
+          # a literal search of this source also matches the assertion itself.
+          lipo_commands = {
+              line.strip() for line in workflow.splitlines()
+              if line.lstrip().startswith('xcrun lipo ')
+          }
+          assert not any(
+              command.split()[2:3] == ['-verify_arch']
+              for command in lipo_commands
+          ), 'Invalid Apple lipo argument ordering'
+          assert 'xcrun lipo "$SIM_FAT" -verify_arch arm64 x86_64' in lipo_commands
+          assert 'xcrun lipo ios/NativeRust/simulator/libatlas_fsrs7_probe.a -verify_arch arm64 x86_64' in lipo_commands
           preflight = Path('scripts/ios/verify_xcode_link.py').read_text()
           assert 'run("xcrun", "lipo", str(archive), "-archs")' in preflight
           assert len(manifest['files']) == 8, 'Unexpected source manifest scope'
