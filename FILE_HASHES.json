@@ -8,6 +8,7 @@
     "ios_probe/main.dart": "388fa024d28259c1caca16e4ff8ab79e3575f8bfd76c39cc6b99581135d6bb5c",
     "scripts/ios/patch_runner_link.rb": "dc1be5beaef3832b3a9cd0f8526b4231d610b070536a18f01a7a913413bbc69f",
     "src/lib.rs": "5a8daa0acf41ea7f9ba50305e2c9b22b59ef0f067234168d869887fc73353a16",
-    "tests/ios/ffi_link_probe.c": "3f7ce1d07428de2c205177ca1c7441e1f4cfa16b3406d4c8f43d86c7dfa62ff8"
+    "tests/ios/ffi_link_probe.c": "3f7ce1d07428de2c205177ca1c7441e1f4cfa16b3406d4c8f43d86c7dfa62ff8",
+    "scripts/ios/verify_xcode_link.py": "0d7b072a26cc2004f265c877e6a263a04d9983d45e1a88c2e9f69d55a3e6df9d"
   }
 }
