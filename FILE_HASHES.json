@@ -1,0 +1,13 @@
+{
+  "format": "atlas-fsrs7-ios-ci-v1",
+  "upstream_commit": "0a5737406a0c5c7a5259b144738cbe4a0b649d76",
+  "files": {
+    ".github/workflows/atlas-fsrs7-ios-verification.yml": "a6a09bee6cba3c89accf6031c32dc31ab1fbe0b60e553ace8571f1cbf6ae20d4",
+    "Cargo.toml": "f5ff2a446915abce1f4f4cdafaaf6e9a2678ee3e2de05096ebbff0638bb0ef5b",
+    "README_BASLA.md": "db76a6d06eb7ad6e1af468a2fff9d6f35b35a828d06a55d46d93f5d6222fd639",
+    "ios_probe/main.dart": "388fa024d28259c1caca16e4ff8ab79e3575f8bfd76c39cc6b99581135d6bb5c",
+    "scripts/ios/patch_runner_link.rb": "e7a0e67a48caaa1f2589436ca6447f2b3aa1fe74999019c203d8d87b9fba3962",
+    "src/lib.rs": "5a8daa0acf41ea7f9ba50305e2c9b22b59ef0f067234168d869887fc73353a16",
+    "tests/ios/ffi_link_probe.c": "3f7ce1d07428de2c205177ca1c7441e1f4cfa16b3406d4c8f43d86c7dfa62ff8"
+  }
+}
