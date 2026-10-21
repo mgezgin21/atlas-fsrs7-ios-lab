@@ -144,7 +144,16 @@ jobs:
         run: |
           set -euo pipefail
           cd ios_build/atlas_fsrs7_ios_probe
-          flutter build ios --simulator --debug --no-codesign --dart-define=ATLAS_FSRS7_IOS_NONCE="$NONCE"
+          # Capture the real Xcode link invocation. flutter normally hides it,
+          # which made the previous undefined-symbol failures opaque.
+          BUILD_LOG="$RUNNER_TEMP/atlas-fsrs7-ios-simulator-build.log"
+          if ! flutter build ios --simulator --debug --no-codesign --dart-define=ATLAS_FSRS7_IOS_NONCE="$NONCE" -v > "$BUILD_LOG" 2>&1; then
+            echo 'IOS_SIMULATOR_FLUTTER_LINK=FAIL;ACTUAL_LINK_COMMAND_DIAGNOSTICS:'
+            grep -En 'NativeRust|libatlas_fsrs7_probe|Undefined symbol|undefined symbol|ld: |clang.*-o |Ld .*Runner|OTHER_LDFLAGS| -u _atlas_fsrs7' "$BUILD_LOG" | tail -n 90 || true
+            tail -n 110 "$BUILD_LOG"
+            exit 1
+          fi
+          echo 'IOS_SIMULATOR_FLUTTER_LINK=PASS'
           test -d build/ios/iphonesimulator/Runner.app
           xcrun nm -gj build/ios/iphonesimulator/Runner.app/Runner > "$RUNNER_TEMP/fsrs7-simulator-exports.txt"
           for symbol in atlas_fsrs7_engine_version atlas_fsrs7_abi_version atlas_fsrs7_parameter_count atlas_fsrs7_state_size atlas_fsrs7_output_size atlas_fsrs7_next; do
@@ -213,5 +222,6 @@ jobs:
             target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a
             target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a
             ios_build/atlas_fsrs7_ios_probe/pubspec.lock
+            ${{ runner.temp }}/atlas-fsrs7-ios-simulator-build.log
           if-no-files-found: warn
           retention-days: 7
