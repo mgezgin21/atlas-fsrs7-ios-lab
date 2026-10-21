@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   ios-fsrs7-native-and-simulator:
-    name: iPhone ARM64 + iOS Simulator FFI (isolated)
+    name: iPhone ARM64 + Universal Simulator FFI (isolated)
     runs-on: macos-15
     timeout-minutes: 95
     env:
@@ -36,13 +36,13 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphonesimulator --show-sdk-path
           xcrun simctl list devices available
-      - name: Install Rust for iPhone and ARM64 simulator
+      - name: Install Rust for iPhone and both simulator architectures
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
       - uses: Swatinem/rust-cache@v2
         with:
-          key: atlas-fsrs7-ios-pinned-v1
+          key: atlas-fsrs7-ios-universal-v2
       - name: Pin and check FSRS-7 Rust source
         shell: bash
         run: |
@@ -67,38 +67,44 @@ jobs:
           cargo build --release --locked --target aarch64-apple-ios
           file target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a
           xcrun lipo -info target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a
-      - name: Compile iOS Simulator ARM64 Rust static archive
+      - name: Compile both Simulator Rust archives and assemble universal library
         shell: bash
         run: |
           set -euo pipefail
           cargo build --release --locked --target aarch64-apple-ios-sim
-          file target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a
-          xcrun lipo -info target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a
-          # Apple Xcode 16.4 nm uses an older LLVM reader than rustc 1.99's
-          # LLVM 23. Scanning every member of Rust staticlib produces
-          # "Unknown attribute kind" even when both cross-builds succeeded.
-          # Check archive structure here; prove public FFI symbols with the
-          # *real* C link step below, then with Flutter/Dart in Simulator.
-          for a in target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a; do
-            test -s "$a"
-            xcrun ar -t "$a" > "$RUNNER_TEMP/$(basename "$(dirname "$(dirname "$a")")")-archive-members.txt"
-            test -s "$RUNNER_TEMP/$(basename "$(dirname "$(dirname "$a")")")-archive-members.txt"
-            shasum -a 256 "$a"
+          cargo build --release --locked --target x86_64-apple-ios
+          SIM_FAT="target/atlas_fsrs7_simulator_universal.a"
+          xcrun lipo -create \
+            target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a \
+            target/x86_64-apple-ios/release/libatlas_fsrs7_probe.a \
+            -output "$SIM_FAT"
+          xcrun lipo -verify_arch arm64 x86_64 "$SIM_FAT"
+          file "$SIM_FAT"
+          xcrun lipo -info "$SIM_FAT"
+          for archive in target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a target/x86_64-apple-ios/release/libatlas_fsrs7_probe.a; do
+            test -s "$archive"
+            xcrun ar -t "$archive" > "$RUNNER_TEMP/archive-members-$(basename "$(dirname "$(dirname "$archive")")").txt"
+            shasum -a 256 "$archive"
           done
-          echo 'IOS_DEVICE_AND_SIM_ARM64_LIBS=PASS;SYMBOL_LINK_TEST=NEXT'
-      - name: Standalone C / iOS Simulator linker probe
+          shasum -a 256 "$SIM_FAT"
+          echo 'IOS_DEVICE_AND_UNIVERSAL_SIMULATOR_ARCHIVES=PASS'
+
+      - name: Independently link C to iOS Simulator Rust for BOTH architectures
         shell: bash
         run: |
           set -euo pipefail
           SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
-          xcrun --sdk iphonesimulator clang \
-            -arch arm64 -isysroot "$SDK" -mios-simulator-version-min=14.0 \
-            tests/ios/ffi_link_probe.c \
-            target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a \
-            -framework Foundation -framework Security -framework SystemConfiguration \
-            -lresolv -lc++ -o "$RUNNER_TEMP/atlas_fsrs7_ios_link_probe"
-          file "$RUNNER_TEMP/atlas_fsrs7_ios_link_probe"
-          echo 'IOS_C_FFI_LINK_PROBE=PASS'
+          for ARCH in arm64 x86_64; do
+            xcrun --sdk iphonesimulator clang \
+              -arch "$ARCH" -isysroot "$SDK" -mios-simulator-version-min=14.0 \
+              tests/ios/ffi_link_probe.c \
+              target/atlas_fsrs7_simulator_universal.a \
+              -framework Foundation -framework Security -framework SystemConfiguration \
+              -lresolv -lc++ -o "$RUNNER_TEMP/fsrs7-ios-link-$ARCH"
+            file "$RUNNER_TEMP/fsrs7-ios-link-$ARCH"
+          done
+          echo 'IOS_C_FFI_UNIVERSAL_LINK_PROBE=PASS'
+
       - name: Install Flutter for isolated iOS probe
         uses: subosito/flutter-action@v2
         with:
@@ -116,7 +122,8 @@ jobs:
           cp ../../ios_probe/main.dart lib/main.dart
           mkdir -p ios/NativeRust/device ios/NativeRust/simulator
           cp ../../target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a ios/NativeRust/device/
-          cp ../../target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a ios/NativeRust/simulator/
+          cp ../../target/atlas_fsrs7_simulator_universal.a ios/NativeRust/simulator/libatlas_fsrs7_probe.a
+          xcrun lipo -verify_arch arm64 x86_64 ios/NativeRust/simulator/libatlas_fsrs7_probe.a
           ruby ../../scripts/ios/patch_runner_link.rb ios/Runner.xcodeproj simulator
           python3 ../../scripts/ios/verify_xcode_link.py ios/Runner.xcodeproj simulator Debug
           # Flutter's generated widget_test.dart expects the deleted template
@@ -155,11 +162,17 @@ jobs:
           fi
           echo 'IOS_SIMULATOR_FLUTTER_LINK=PASS'
           test -d build/ios/iphonesimulator/Runner.app
-          xcrun nm -gj build/ios/iphonesimulator/Runner.app/Runner > "$RUNNER_TEMP/fsrs7-simulator-exports.txt"
-          for symbol in atlas_fsrs7_engine_version atlas_fsrs7_abi_version atlas_fsrs7_parameter_count atlas_fsrs7_state_size atlas_fsrs7_output_size atlas_fsrs7_next; do
-            grep -Fxq "_${symbol}" "$RUNNER_TEMP/fsrs7-simulator-exports.txt" || { echo "Missing exported Runner symbol: $symbol"; exit 1; }
+          # Xcode 16 Debug executable is a stub; Rust lives in Runner.debug.dylib.
+          BIN="build/ios/iphonesimulator/Runner.app/Runner.debug.dylib"
+          if [ ! -f "$BIN" ]; then BIN="build/ios/iphonesimulator/Runner.app/Runner"; fi
+          file "$BIN"
+          for ARCH in arm64 x86_64; do
+            xcrun nm -arch "$ARCH" -gj "$BIN" > "$RUNNER_TEMP/fsrs7-sim-$ARCH-exports.txt"
+            for symbol in atlas_fsrs7_engine_version atlas_fsrs7_abi_version atlas_fsrs7_parameter_count atlas_fsrs7_state_size atlas_fsrs7_output_size atlas_fsrs7_next; do
+              grep -Fxq "_${symbol}" "$RUNNER_TEMP/fsrs7-sim-$ARCH-exports.txt" || { echo "Missing $ARCH Debug export: $symbol"; exit 1; }
+            done
           done
-          echo "IOS_SIMULATOR_EXPORTED_RUST_SYMBOLS=PASS"
+          echo "IOS_SIMULATOR_DEBUG_DYLIB_EXPORTED_RUST_SYMBOLS=PASS"
           echo 'IOS_SIMULATOR_FLUTTER_DEBUG_LINK=PASS'
       - name: Boot simulator and execute REAL Dart -> static Rust FFI
         shell: bash
@@ -221,6 +234,8 @@ jobs:
             Cargo.lock
             target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a
             target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a
+            target/x86_64-apple-ios/release/libatlas_fsrs7_probe.a
+            target/atlas_fsrs7_simulator_universal.a
             ios_build/atlas_fsrs7_ios_probe/pubspec.lock
             ${{ runner.temp }}/atlas-fsrs7-ios-simulator-build.log
           if-no-files-found: warn
