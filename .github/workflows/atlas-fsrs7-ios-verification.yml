@@ -118,7 +118,26 @@ jobs:
           cp ../../target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a ios/NativeRust/device/
           cp ../../target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a ios/NativeRust/simulator/
           ruby ../../scripts/ios/patch_runner_link.rb ios/Runner.xcodeproj
+          # Flutter's generated widget_test.dart expects the deleted template
+          # MyApp class. Replace it with an ABI contract test for THIS probe.
+          # The host test validates Dart layouts, not iOS native execution;
+          # the simulator job below remains the real native acceptance.
+          cat > test/widget_test.dart <<'DART'
+          import 'dart:ffi';
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:atlas_fsrs7_ios_probe/main.dart' as lab;
+
+          void main() {
+            test('FSRS-7 ABI 1 Dart struct sizes', () {
+              expect(sizeOf<lab.Memory>(), 12);
+              expect(sizeOf<lab.Choice>(), 16);
+              expect(sizeOf<lab.Next>(), 64);
+            });
+          }
+          DART
           flutter analyze
+          flutter test test/widget_test.dart
+          echo 'IOS_DART_FFI_LAYOUT_TEST=PASS'
       - name: Build iOS Simulator Flutter Debug/AOT-independent FFI
         shell: bash
         run: |
