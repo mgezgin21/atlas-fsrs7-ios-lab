@@ -43,12 +43,16 @@ def main():
         if not found:
             raise SystemExit("Xcode emitted no resolved OTHER_LDFLAGS")
         flags = found[-1]
+    # The archive is now linked via PBXFrameworksBuildPhase, not -force_load.
+    # Xcode resolves -u symbols in OTHER_LDFLAGS to keep Dart-only exports.
+    missing = [x for x in ("-u", *("_" + symbol for symbol in SYMBOLS)) if x not in flags]
+    if missing:
+        raise SystemExit(f"BAD RUNNER EXPORT FLAGS: variant={variant}; missing={missing}; flags={flags}")
+    pbxproj = (Path(project) / "project.pbxproj").read_text(encoding="utf-8")
     expected = f"NativeRust/{variant}/libatlas_fsrs7_probe.a"
-    incorrect = f"NativeRust/{'device' if variant == 'simulator' else 'simulator'}/libatlas_fsrs7_probe.a"
-    missing = [x for x in (expected, "-force_load", *("_"+s for s in SYMBOLS)) if x not in flags]
-    if missing or incorrect in flags:
-        raise SystemExit(f"BAD RUNNER LINK SETTINGS: variant={variant}; missing={missing}; wrong archive={incorrect in flags}; flags={flags}")
-    print(f"IOS_RUNNER_EFFECTIVE_LINK_SETTINGS=PASS;VARIANT={variant};CONFIGURATION={configuration};SYMBOLS={len(SYMBOLS)}")
+    if expected not in pbxproj:
+        raise SystemExit(f"Native Rust archive not registered in Runner project: {expected}")
+    print(f"IOS_RUNNER_EFFECTIVE_LINK_SETTINGS=PASS;VARIANT={variant};CONFIGURATION={configuration};SYMBOLS={len(SYMBOLS)};ARCHIVE=FRAMEWORKS_PHASE")
 
 if __name__ == "__main__":
     main()
