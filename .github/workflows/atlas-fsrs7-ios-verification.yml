@@ -74,13 +74,18 @@ jobs:
           cargo build --release --locked --target aarch64-apple-ios-sim
           file target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a
           xcrun lipo -info target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a
+          # Apple Xcode 16.4 nm uses an older LLVM reader than rustc 1.99's
+          # LLVM 23. Scanning every member of Rust staticlib produces
+          # "Unknown attribute kind" even when both cross-builds succeeded.
+          # Check archive structure here; prove public FFI symbols with the
+          # *real* C link step below, then with Flutter/Dart in Simulator.
           for a in target/aarch64-apple-ios/release/libatlas_fsrs7_probe.a target/aarch64-apple-ios-sim/release/libatlas_fsrs7_probe.a; do
-            xcrun nm -gU "$a" > "$RUNNER_TEMP/ios-native-symbols.txt"
-            grep -Eq '_atlas_fsrs7_next$' "$RUNNER_TEMP/ios-native-symbols.txt"
-            grep -Eq '_atlas_fsrs7_engine_version$' "$RUNNER_TEMP/ios-native-symbols.txt"
+            test -s "$a"
+            xcrun ar -t "$a" > "$RUNNER_TEMP/$(basename "$(dirname "$(dirname "$a")")")-archive-members.txt"
+            test -s "$RUNNER_TEMP/$(basename "$(dirname "$(dirname "$a")")")-archive-members.txt"
             shasum -a 256 "$a"
           done
-          echo 'IOS_DEVICE_AND_SIM_ARM64_LIBS=PASS'
+          echo 'IOS_DEVICE_AND_SIM_ARM64_LIBS=PASS;SYMBOL_LINK_TEST=NEXT'
       - name: Standalone C / iOS Simulator linker probe
         shell: bash
         run: |
